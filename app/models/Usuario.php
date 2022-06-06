@@ -2,17 +2,36 @@
 
 class Usuario
 {
-    public $id;
-    public $usuario;
+    public $user;
     public $clave;
+    public $nombre;
+    public $apellido;
+    public $edad;
+    public $estado;
+    public $tipo;
+    public $id;
 
     public function crearUsuario()
     {
         $objAccesoDatos = AccesoDatos::obtenerInstancia();
-        $consulta = $objAccesoDatos->prepararConsulta("INSERT INTO usuarios (usuario, clave) VALUES (:usuario, :clave)");
+
+        $consulta = $objAccesoDatos->prepararConsulta("INSERT INTO usuarios (user, clave, nombre, apellido, edad, estado, tipo, fechaAlta, fechaBaja) VALUES (:user, :clave, :nombre, :apellido, :edad, :estado, :tipo, :fechaAlta, :fechaBaja)");
+        
         $claveHash = password_hash($this->clave, PASSWORD_DEFAULT);
-        $consulta->bindValue(':usuario', $this->usuario, PDO::PARAM_STR);
+        $fechaAlta = Date("y-m-d");
+        $fechaBaja = null;
+
+        $consulta->bindValue(':user', $this->user, PDO::PARAM_STR);
         $consulta->bindValue(':clave', $claveHash);
+        $consulta->bindValue(':nombre', $this->nombre, PDO::PARAM_STR);
+        $consulta->bindValue(':apellido', $this->apellido, PDO::PARAM_STR);
+        $consulta->bindValue(':edad', $this->edad);
+        $consulta->bindValue(':estado', $this->estado, PDO::PARAM_STR);
+        $consulta->bindValue(':tipo', $this->tipo, PDO::PARAM_STR);
+     
+        $consulta->bindValue(':fechaAlta', $fechaAlta);
+        $consulta->bindValue(':fechaBaja', $fechaBaja);
+        
         $consulta->execute();
 
         return $objAccesoDatos->obtenerUltimoId();
@@ -21,12 +40,13 @@ class Usuario
     public static function obtenerTodos()
     {
         $objAccesoDatos = AccesoDatos::obtenerInstancia();
-        $consulta = $objAccesoDatos->prepararConsulta("SELECT id, usuario, clave FROM usuarios");
+        $consulta = $objAccesoDatos->prepararConsulta("SELECT user, clave, nombre, apellido, edad, estado, tipo, fechaAlta, fechaBaja, id FROM usuarios");
         $consulta->execute();
 
         return $consulta->fetchAll(PDO::FETCH_CLASS, 'Usuario');
     }
 
+    /*
     public static function obtenerUsuario($usuario)
     {
         $objAccesoDatos = AccesoDatos::obtenerInstancia();
@@ -56,4 +76,5 @@ class Usuario
         $consulta->bindValue(':fechaBaja', date_format($fecha, 'Y-m-d H:i:s'));
         $consulta->execute();
     }
+    */
 }

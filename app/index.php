@@ -16,6 +16,9 @@ require_once './db/AccesoDatos.php';
 // require_once './middlewares/Logger.php';
 
 require_once './controllers/UsuarioController.php';
+require_once './controllers/MesaController.php';
+require_once './controllers/PedidoController.php';
+require_once './controllers/ProductoController.php';
 
 // Load ENV
 $dotenv = Dotenv\Dotenv::createImmutable(__DIR__);
@@ -30,17 +33,40 @@ $app->addErrorMiddleware(true, true, true);
 // Add parse body
 $app->addBodyParsingMiddleware();
 
-// Routes
-$app->group('/usuarios', function (RouteCollectorProxy $group) {
+// ------------------------// U S U A R I O S // ------------------
+$app->group('/usuarios', function (RouteCollectorProxy $group) 
+{
     $group->get('[/]', \UsuarioController::class . ':TraerTodos');
     $group->get('/{usuario}', \UsuarioController::class . ':TraerUno');
     $group->post('[/]', \UsuarioController::class . ':CargarUno');
-  });
+});
 
-$app->get('[/]', function (Request $request, Response $response) {    
-    $response->getBody()->write("Slim Framework 4 PHP Gabriel :D xdxdxd en biboooo");
+// ------------------------// M E S A S // ------------------
+$app->group('/mesas', function (RouteCollectorProxy $group) 
+{
+    $group->get('[/]', \MesaController::class . ':TraerTodos');
+    $group->post('[/]', \MesaController::class . ':CargarUno');
+});
+
+// ------------------------// P R O D U C T O S // ------------------
+$app->group('/productos', function (RouteCollectorProxy $group) 
+{
+    $group->get('[/]', \ProductoController::class . ':TraerTodos');
+    $group->post('[/]', \ProductoController::class . ':CargarUno');
+});
+
+// ------------------------// P E D I D O S // ------------------
+$app->group('/pedidos', function (RouteCollectorProxy $group) 
+{
+    $group->get('[/]', \PedidoController::class . ':TraerTodos');  
+    $group->post('[/]', \PedidoController::class . ':CargarUno');
+});
+
+//----------------------------------------------------------------
+$app->get('[/]', function (Request $request, Response $response) 
+{    
+    $response->getBody()->write("Slim Framework 4 PHP Gabriel :D");
     return $response;
-
 });
 
 $app->run();

@@ -1,29 +1,40 @@
 <?php
 require_once './models/Usuario.php';
-require_once './interfaces/IApiUsable.php';
+//require_once './interfaces/IApiUsable.php';
 
-class UsuarioController extends Usuario implements IApiUsable
+class UsuarioController extends Usuario //implements IApiUsable
 {
     public function CargarUno($request, $response, $args)
     {
         $parametros = $request->getParsedBody();
 
-        $usuario = $parametros['usuario'];
+        $user = $parametros['user'];
         $clave = $parametros['clave'];
+        $nombre = $parametros['nombre'];
+        $apellido = $parametros['apellido'];
+        $edad = $parametros['edad'];
+        $estado = $parametros['estado'];
+        $tipo = $parametros['tipo'];
 
         // Creamos el usuario
         $usr = new Usuario();
-        $usr->usuario = $usuario;
+        $usr->user = $user;
         $usr->clave = $clave;
+        $usr->nombre = $nombre;
+        $usr->apellido = $apellido;
+        $usr->edad = $edad;
+        $usr->estado = $estado;
+        $usr->tipo = $tipo;
         $usr->crearUsuario();
 
         $payload = json_encode(array("mensaje" => "Usuario creado con exito"));
 
         $response->getBody()->write($payload);
-        return $response
-          ->withHeader('Content-Type', 'application/json');
+
+        return $response->withHeader('Content-Type', 'application/json');
     }
 
+    /*
     public function TraerUno($request, $response, $args)
     {
         // Buscamos usuario por nombre
@@ -35,17 +46,19 @@ class UsuarioController extends Usuario implements IApiUsable
         return $response
           ->withHeader('Content-Type', 'application/json');
     }
+    */
 
     public function TraerTodos($request, $response, $args)
     {
         $lista = Usuario::obtenerTodos();
-        $payload = json_encode(array("listaUsuario" => $lista));
+        $payload = json_encode(array("listaUsuarios" => $lista));
 
         $response->getBody()->write($payload);
-        return $response
-          ->withHeader('Content-Type', 'application/json');
+
+        return $response->withHeader('Content-Type', 'application/json');
     }
     
+    /*
     public function ModificarUno($request, $response, $args)
     {
         $parametros = $request->getParsedBody();
@@ -73,4 +86,5 @@ class UsuarioController extends Usuario implements IApiUsable
         return $response
           ->withHeader('Content-Type', 'application/json');
     }
+    */
 }

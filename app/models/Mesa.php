@@ -1,39 +1,35 @@
 <?php
 
-class Mesa
+namespace app\models;
+
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
+
+class Mesa extends Model
 {
-    public $numero;
-    public $estado;
-    public $codigoAlfanumerico;
-    public $id;
+    use SoftDeletes;
 
-    public function crearMesa()
-    {
-        //Obtengo la instancia del 'accesoDatos' de mi SQL.
-        $objAccesoDatos = AccesoDatos::obtenerInstancia();
+    //Establezco la 'configuracion' de la tabla perteneciente a esta clase.
+    protected $primaryKey = 'id';
+    protected $table = 'mesas';
+    public $incremeting = true;
+    public $timestamps = true;
 
-        //Prepraro y me guardo la consulta INSERT de la nueva mesa que se pretende dar de alta.
-        $consulta = $objAccesoDatos->prepararConsulta("INSERT INTO mesas (numero, estado, codigoAlfanumerico) VALUES (:numero, :estado, :codigoAlfanumerico)");
+    //Redefino el nombre de mis columnas "CREATED_AT, DELETED_AT, UPDATED_AT".
+    const CREATED_AT = 'fechaAlta';
+    const DELETED_AT = 'fechaBaja';
+    const UPDATED_AT = 'fechaModificacion';
 
-        //Bindeo los values
-        $consulta->bindValue(':numero', $this->numero, PDO::PARAM_STR);
-        $consulta->bindValue(':estado', $this->estado, PDO::PARAM_STR);
-        $consulta->bindValue('codigoAlfanumerico', $this->codigoAlfanumerico, PDO::PARAM_STR);
-        
-        $consulta->execute();
+    // public function pedido()
+    // {
+    //     return $this->hasMany(Pedido::class,'idMesa');
+    // }
 
-        return $objAccesoDatos->obtenerUltimoId();
-    }
-
-    public static function obtenerTodos()
-    {
-        $objAccesoDatos = AccesoDatos::obtenerInstancia();
-        
-        $consulta = $objAccesoDatos->prepararConsulta("SELECT numero, estado, codigoAlfanumerico, id FROM mesas");
-        $consulta->execute();
-
-        return $consulta->fetchAll(PDO::FETCH_CLASS, 'Mesa');
-    }
-
+    //Las columnas de mi tabla.
+    public $fillable = [
+        'numero','estado','descripcion',
+        'codigoAlfanumerico','fechaAlta',
+        'fechaBaja','fechaModificacion'
+    ]; 
 }
 ?>

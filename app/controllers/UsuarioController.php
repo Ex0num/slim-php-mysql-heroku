@@ -1,6 +1,8 @@
 <?php
 require_once './models/Usuario.php';
 require_once './interfaces/IApiUsable.php';
+require_once './models/Validaciones.php';
+
 use \App\Models\Usuario as Usuario;
 date_default_timezone_set("America/Buenos_Aires");
 
@@ -21,8 +23,18 @@ class UsuarioController implements IApiUsable
 
         //Antes de dar de alta el usuario valido que no exista alguien con el mismo nombre de usuario.
         $estaRepetido = $this->esUsuarioRepetido($userRecibido);
+        
+        $resultadoValidacionUser = Validaciones::validarUser_Usuario($userRecibido);
+        $resultadoValidacionClave = Validaciones::validarClave_Usuario($claveRecibida);
+        $resultadoValidacionNombre = Validaciones::validarNombre_Usuario($nombreRecibido);
+        $resultadoValidacionApellido = Validaciones::validarApellido_Usuario($apellidoRecibido);
+        $resultadoValidacionEdad = Validaciones::validarEdad_Usuario($edadRecibida);
+        $resultadoValidacionEstado = Validaciones::validarEstado_Usuario($estadoRecibido);
+        $resultadoValidacionTipo = Validaciones::validarTipo_Usuario($tipoRecibido);
 
-        if ($estaRepetido == false)
+        if ($estaRepetido == false && ($resultadoValidacionUser == true && $resultadoValidacionClave == true && $resultadoValidacionNombre == true && 
+        $resultadoValidacionApellido == true && $resultadoValidacionEdad == true && $resultadoValidacionEstado == true && 
+        $resultadoValidacionTipo == true) == true)
         {
             // Creo el usuario.
             $usuarioCreado = new Usuario();
@@ -41,13 +53,29 @@ class UsuarioController implements IApiUsable
             //El ORM guarda automaticamente el usuario en la DB.
             $usuarioCreado->save();
 
-            //Retorno la respuesta con el body que contiene un mensaje.
-            $payload = json_encode(array("mensaje" => "Usuario creado con exito"));
+            $payload = json_encode(array("mensajeFinal" => "Usuario creado con exito.",
+            "exito" => "exitoso","tipo" => "alta","hora" => date('h:i:s'),
+            "idUsuarioResponsable" => null, "idUsuario" => null,
+            "idProducto" => null, "idMesa" => null, "idPedido" => null,"idVenta" => null));
         }
         else
         {
-            //Retorno la respuesta con el body que contiene un mensaje.
-            $payload = json_encode(array("mensaje" => "El Usuario no pudo ser creado. Ya existe uno con ese nombre de usuario."));
+            if (($resultadoValidacionUser != true || $resultadoValidacionClave != true || $resultadoValidacionNombre != true || 
+            $resultadoValidacionApellido != true || $resultadoValidacionEdad != true || $resultadoValidacionEstado != true || 
+            $resultadoValidacionTipo != true) == true)
+            {
+                $payload = json_encode(array("mensajeFinal" => "Usuario creado sin exito. Hubo algun dato invalido.",
+                "exito" => "fallido","tipo" => "alta","hora" => date('h:i:s'),
+                "idUsuarioResponsable" => null, "idUsuario" => null,
+                "idProducto" => null, "idMesa" => null, "idPedido" => null,"idVenta" => null));
+            }
+            else
+            {
+                $payload = json_encode(array("mensajeFinal" => "El Usuario no pudo ser creado. Ya existe uno con ese nombre de usuario.",
+                "exito" => "fallido","tipo" => "alta","hora" => date('h:i:s'),
+                "idUsuarioResponsable" => null, "idUsuario" => null,
+                "idProducto" => null, "idMesa" => null, "idPedido" => null,"idVenta" => null));
+            }     
         }
 
         $response->getBody()->write($payload);
@@ -56,15 +84,16 @@ class UsuarioController implements IApiUsable
 
     public function BorrarUno($request, $response, $args)
     {
-        //---------------------- TOKEN USER DATA -------------------------------------------//
+        //---------------------- TOKEN USER DATA ------------------------------------------------//
         $idUsuarioResponsable = AutentificadorJWT::DevolverIdUserResponsable($request);
         $tipoUsuarioResponsable = AutentificadorJWT::DevolverTipoUserResponsable($request);
-        //----------------------------------------------------------------------------------//
+        $estadoUsuarioResponsable = AutentificadorJWT::DevolverEstadoUserResponsable($request);
+        //---------------------------------------------------------------------------------------//
 
-        //------------------------USUARIOS AUTORIZADOS A REALIZAR LA ACCION-----------------//
+        //------------------------USUARIOS AUTORIZADOS A REALIZAR LA ACCION----------------------//
         // PERMISOS DE ACCION: socio
-        //----------------------------------------------------------------------------------//
-        if ($tipoUsuarioResponsable == "socio")
+        //---------------------------------------------------------------------------------------//
+        if ($tipoUsuarioResponsable == "socio" && $estadoUsuarioResponsable == "activo")
         {
             //Recibo la ID por el "link".
             $idRecibida = $args['id'];
@@ -104,13 +133,14 @@ class UsuarioController implements IApiUsable
         //---------------------- TOKEN USER DATA -------------------------------------------//
         $idUsuarioResponsable = AutentificadorJWT::DevolverIdUserResponsable($request);
         $tipoUsuarioResponsable = AutentificadorJWT::DevolverTipoUserResponsable($request);
+        $estadoUsuarioResponsable = AutentificadorJWT::DevolverEstadoUserResponsable($request);
         //----------------------------------------------------------------------------------//
  
         //------------------------USUARIOS AUTORIZADOS A REALIZAR LA ACCION-----------------//
         // PERMISOS DE ACCION: socio y mozo (solo a estado = cerrada)
         //----------------------------------------------------------------------------------//
 
-        if ($tipoUsuarioResponsable == "socio" || $tipoUsuarioResponsable == "mozo")
+        if (($tipoUsuarioResponsable == "socio" || $tipoUsuarioResponsable == "mozo") == true && $estadoUsuarioResponsable == "activo")
         {
             
             //Recibo la ID por el "link".
@@ -122,14 +152,23 @@ class UsuarioController implements IApiUsable
             //Leo el json "RAW" de Postman y hago el decode de los datos nuevos para modificar al usuario .
             $body = json_decode(file_get_contents("php://input"), true);
 
-            if ($usuarioEncontrado != null)
-            {
-                $nombreRecibido = $body['nombre'];
-                $apellidoRecibido = $body['apellido'];
-                $edadRecibida = $body['edad'];
-                $estadoRecibido = $body['estado'];
-                $tipoRecibido = $body['tipo'];
+            $nombreRecibido = $body['nombre'];
+            $apellidoRecibido = $body['apellido'];
+            $edadRecibida = $body['edad'];
+            $estadoRecibido = $body['estado'];
+            $tipoRecibido = $body['tipo'];
 
+            //-------- VALIDACION DE DATOS INGRESADOS --------//
+            $resultadoValidacionNombre = Validaciones::validarNombre_Usuario($nombreRecibido);
+            $resultadoValidacionApellido = Validaciones::validarApellido_Usuario($apellidoRecibido);
+            $resultadoValidacionEdad = Validaciones::validarEdad_Usuario($edadRecibida);
+            $resultadoValidacionEstado = Validaciones::validarEstado_Usuario($estadoRecibido);
+            $resultadoValidacionTipo = Validaciones::validarTipo_Usuario($tipoRecibido);
+
+            if ($usuarioEncontrado != null && 
+            ($resultadoValidacionNombre == true && $resultadoValidacionApellido == true && 
+            $resultadoValidacionEdad == true && $resultadoValidacionEstado == true && $resultadoValidacionTipo == true) == true)
+            {
                 //Piso los datos 'viejos' por los 'nuevos' datos del usuario a modificar.
                 $usuarioEncontrado->nombre = $nombreRecibido;
                 $usuarioEncontrado->apellido = $apellidoRecibido;
@@ -147,9 +186,18 @@ class UsuarioController implements IApiUsable
             }
             else
             {
-                $payload = json_encode(array("mensajeFinal" => "Usuario modificada sin exito. No se encontro el usuario a modificar.",
-                "exito" => "fallido","tipo" => "modificacion","hora" => date('h:i:s'),"idUsuarioResponsable" => $idUsuarioResponsable, 
-                "idUsuario" => null,"idProducto" => null, "idMesa" => null, "idPedido" => null,"idVenta" => null)); 
+                if ($usuarioEncontrado != null)
+                {
+                    $payload = json_encode(array("mensajeFinal" => "Usuario modificado sin exito. Hubo un error en alguno de los datos ingresados.",
+                    "exito" => "fallido","tipo" => "modificacion","hora" => date('h:i:s'),"idUsuarioResponsable" => $idUsuarioResponsable, 
+                    "idUsuario" => null,"idProducto" => null, "idMesa" => null, "idPedido" => null,"idVenta" => null));
+                }
+                else
+                {
+                    $payload = json_encode(array("mensajeFinal" => "Usuario modificado sin exito. No se encontro el usuario a modificar.",
+                    "exito" => "fallido","tipo" => "modificacion","hora" => date('h:i:s'),"idUsuarioResponsable" => $idUsuarioResponsable, 
+                    "idUsuario" => null,"idProducto" => null, "idMesa" => null, "idPedido" => null,"idVenta" => null)); 
+                }
             }
         }
         else
@@ -169,12 +217,13 @@ class UsuarioController implements IApiUsable
         //---------------------- TOKEN USER DATA -------------------------------------------//
         $idUsuarioResponsable = AutentificadorJWT::DevolverIdUserResponsable($request);
         $tipoUsuarioResponsable = AutentificadorJWT::DevolverTipoUserResponsable($request);
+        $estadoUsuarioResponsable = AutentificadorJWT::DevolverEstadoUserResponsable($request);
         //----------------------------------------------------------------------------------//
 
         //------------------------USUARIOS AUTORIZADOS A REALIZAR LA ACCION-----------------//
         // PERMISOS DE ACCION: socio y mozo
         //----------------------------------------------------------------------------------//
-        if ($tipoUsuarioResponsable == "socio" || $tipoUsuarioResponsable == "mozo")
+        if (($tipoUsuarioResponsable == "socio" || $tipoUsuarioResponsable == "mozo") == true && $estadoUsuarioResponsable == "activo")
         {
             //Me traigo a todos los usuarios.
             $listaUsuarios = App\Models\Usuario::all();
@@ -206,12 +255,13 @@ class UsuarioController implements IApiUsable
         //---------------------- TOKEN USER DATA -------------------------------------------//
         $idUsuarioResponsable = AutentificadorJWT::DevolverIdUserResponsable($request);
         $tipoUsuarioResponsable = AutentificadorJWT::DevolverTipoUserResponsable($request);
+        $estadoUsuarioResponsable = AutentificadorJWT::DevolverEstadoUserResponsable($request);
         //----------------------------------------------------------------------------------//
 
         //------------------------USUARIOS AUTORIZADOS A REALIZAR LA ACCION-----------------//
         // PERMISOS DE ACCION: socio y mozo
         //----------------------------------------------------------------------------------//
-        if ($tipoUsuarioResponsable == "socio" || $tipoUsuarioResponsable == "mozo")
+        if (($tipoUsuarioResponsable == "socio" || $tipoUsuarioResponsable == "mozo") == true && $estadoUsuarioResponsable == "activo")
         {
             //Recibo la ID por el "link".
             $idRecibido = $args['id'];

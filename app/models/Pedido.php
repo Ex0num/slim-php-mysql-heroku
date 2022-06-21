@@ -20,10 +20,7 @@ class Pedido extends Model
     const DELETED_AT = 'fechaBaja';
     const UPDATED_AT = 'fechaModificacion';
 
-    /*  Mis foreings.
-          idMesa;
-         idUsuario;
-    */
+    //  Mis foreings.
     public function usuario()
     {
         return $this->hasOne(Usuario::class,'idUsuario');
@@ -33,7 +30,6 @@ class Pedido extends Model
     {
         return $this->hasOne(Mesa::class,'idMesa');
     }
-
 
     //Las columnas de mi tabla.
     public $fillable = [

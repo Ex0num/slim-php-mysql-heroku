@@ -38,7 +38,6 @@ $app->addBodyParsingMiddleware();
 $app->addRoutingMiddleware();
 
 $cointainer = $app->getContainer();
-
 $capsule = new Capsule();
 
 $capsule->addConnection([
@@ -102,29 +101,37 @@ $app->group('/productos', function (RouteCollectorProxy $group)
 // ------------------------// P E D I D O S // --------------------------------------------------------
 $app->group('/pedidos', function (RouteCollectorProxy $group) 
 {
-    $group->get('[/]', \PedidoController::class . ':TraerTodos');  
+    $group->get('[/]', \PedidoController::class . ':TraerTodos')->add(\Logger::class . ':Login');  
     
-    $group->get('/{id}', \PedidoController::class . ':TraerUno');
+    $group->get('/{id}', \PedidoController::class . ':TraerUno')->add(\Logger::class . ':Login');
 
-    $group->post('[/]', \PedidoController::class . ':CargarUno');
+    $group->post('[/]', \PedidoController::class . ':CargarUno')->add(\Logger::class . ':Login');
     
-    $group->put('/{id}', \PedidoController::class . ':ModificarUno');
+    $group->put('/{id}', \PedidoController::class . ':ModificarUno')->add(\Logger::class . ':Login');
 
-    $group->delete('/{id}', \PedidoController::class . ':BorrarUno');
+    $group->delete('/{id}', \PedidoController::class . ':BorrarUno')->add(\Logger::class . ':Login');
 
-    // ------ AÑADIR UNA FOTO A UN PEDIDO ------//
-    $group->post('/foto', \PedidoController::class . ':AgregarFoto');
+    // ------ AÑADIR UNA FOTO A UN PEDIDO -- AGREGAR ENCUESTA A UN PEDIDO ------//
+    $group->post('/foto', \PedidoController::class . ':AgregarFoto')->add(\Logger::class . ':Login');
 
-})->add(\Logger::class . ':Login');
+    $group->post('/encuesta', \PedidoController::class . ':AgregarEncuesta')->add(\Logger::class . ':Login');
+
+    $group->post('/producto', \PedidoController::class . ':ModificarProducto')->add(\Logger::class . ':Login');
+
+    $group->get('/productos/tiempo/{id}', \PedidoController::class . ':ConsultarTiempoPedido');
+
+});
 
 // ------------------------// A R C H I V O - C S V // ------------------------------------------------
 $app->group('/appFiles', function (RouteCollectorProxy $group) 
 { 
-    $group->post('/productos/leer', \CSV_Controller::class . ':DescargarProductosCSV');
-    $group->post('/productos/escribir', \CSV_Controller::class . ':CargarProductosCSV');
+    $group->post('/productos/leer', \CSV_Controller::class . ':Productos_DB_a_CSV');
+    $group->post('/productos/escribir', \CSV_Controller::class . ':Productos_CSV_a_DB');
 
-    $group->get('/usuarios', \CSV_Controller::class . ':DescargarUsuariosCSV');
-    $group->get('/pedidos', \CSV_Controller::class . ':CargarPedidosCSV');
+    $group->post('/usuarios/leer', \CSV_Controller::class . ':Usuarios_DB_a_CSV');
+    $group->post('/pedidos/leer', \CSV_Controller::class . ':Pedidos_DB_a_CSV');
+    $group->post('/acciones/leer', \CSV_Controller::class . ':Acciones_DB_a_CSV');
+    $group->post('/mesas/leer', \CSV_Controller::class . ':Mesas_DB_a_CSV');
 });
 
 // ------------------------------// JWT // -------------------------------------------------------------
@@ -242,5 +249,9 @@ $app->get('[/]', function (Request $request, Response $response)
 $app->run();
 
 //------------------------------------------------------------------------------------------------------
+
+/*
+    -Hacer el .sql (query) de la database entera. Con todas las tablas y una data default.
+*/
 
 ?>

@@ -16,7 +16,7 @@ class AutentificadorJWT
         //Duracion de token de 60 minutos
         $payload = array(
             'iat' => $ahora, //Cuando fue creado
-            'exp' => $ahora + (60000), //Cuando expira
+            'exp' => $ahora + (6000000), //Cuando expira
             'aud' => self::Aud(), //Identifica a los receptores del JWT (audiencia)
             'data' => $datosRecibidos, //La data que movemos
             'app' => "Token de login"
@@ -161,6 +161,38 @@ class AutentificadorJWT
         return null;
     }
 
+    public static function DevolverEstadoUserResponsable($request)
+    {
+        //Recibimos el token por "Authorization".
+        $header = $request->getHeaderLine('Authorization');
+
+        if ($header != null)
+        {
+            //Le saco "Bearer"
+            $token = trim(explode("Bearer", $header)[1]);
+
+            //Llamo a mi funcion que INTENTA Obtener la data del token. Solo la data. Luego Me decodifico lo devuelto
+            $dataToken = json_encode(array('datos' => AutentificadorJWT::ObtenerData($token)));
+            $dataUser = json_decode($dataToken);
+            
+            //De la data decodificada (User y clave) me voy a guardar el user y buscarlo en la db.
+            $nombreUsuarioResponsable = $dataUser->datos->user;
+
+            //Me traigo todos los usuarios que coincidan con ese nombre (solo puede ser uno). Y me guardo su ID.
+            $usuario = new App\Models\Usuario();
+            $arrayUsuarios = $usuario->where('user',$nombreUsuarioResponsable)->get();
+
+            if ($arrayUsuarios != null)
+            {
+                $estadoUsuarioResponsable = $arrayUsuarios[0]->estado;
+            }
+
+            return $estadoUsuarioResponsable;
+        }   
+
+        return null;
+    }
+
     public static function VerificarUsuario($token)
     {
         $existeUsuario = false;
@@ -175,15 +207,26 @@ class AutentificadorJWT
 
         if ($nombreUsuarioResponsable != null && $claveUsuarioResponsable != null)
         {
-            
             $usr = new \App\Models\Usuario();
             $usuariosEncontrados = $usr->where('user', '=', $nombreUsuarioResponsable)->get();
 
-            $result = password_verify($claveUsuarioResponsable,$usuariosEncontrados[0]->clave);
-                
-            if ($result == true)
+            if ($usuariosEncontrados != null)
             {
-                $existeUsuario = true;
+                $contador = 0;
+
+                foreach($usuariosEncontrados as $usuario)
+                {
+                    $result = password_verify($claveUsuarioResponsable,$usuario->clave);
+                
+                    if ($result == true)
+                    {
+                        $existeUsuario = true;
+                        return $existeUsuario;
+                    }
+
+                    $contador++;
+                }
+                
             }
         }
 

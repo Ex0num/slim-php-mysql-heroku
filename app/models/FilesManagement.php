@@ -139,5 +139,219 @@ class FilesManagement
         //Una vez terminada la carga de objetos al array auxiliar, lo retorno.
         return $_listaAuxiliarObjetos;
     }
+
+    public static function EscribirUsuariosCSV (string $path, $arrayObjetos)
+    {
+        $escrituraSalioBien = true;
+
+        if ($path != null && $arrayObjetos != null)
+        {
+            //Abro el archivo (Modo escritura desde 0) ("w") (Me guardo la direc. de mem. del archivo)
+            $archivo;
+            $archivo = fopen($path,"w");
+
+            //Mi variable string que seria como un "Stringbuilder de C#"
+            $string;
+
+            //Por cada objeto que tenga en mi lista
+            foreach ($arrayObjetos as $objeto) 
+            {
+                //Voy a concatenar todas mis propiedades del objeto a las ',' y finalmente a un '\n' expresado como PHP.EOL
+                
+                if (is_null($objeto) == false)
+                {
+                    //====================== ESTRUCTURA ORDENADA DEL OBJETO EN EL ARCHIVO CSV =================================================
+                    // El orden de los campos en coma.
+                    // user - clave - nombre - apellido - edad - estado - tipo - fechaAlta - fechaModificacion - fechaBaja
+                    //=========================================================================================================================
+
+                    //======== IMPORTANTE CAMBIAR ESTA LINEA EN CUESTION DEL OBJETO QUE SE USE =========== (PHP.EOL persiste.)
+                    $string = $objeto->user . "," . $objeto->clave . "," . 
+                    $objeto->nombre . "," . $objeto->apellido . "," . 
+                    $objeto->edad . ",". $objeto->estado . "." . $objeto->tipo . "." .
+                    $objeto->fechaAlta . "," . $objeto->fechaModificacion . "," .
+                    $objeto->fechaBaja .PHP_EOL;
+                    //======== IMPORTANTE CAMBIAR ESTA LINEA EN CUESTION DEL OBJETO QUE SE USE =========== (PHP.EOL persiste.)
+
+                    //Escribo finalmente en el archivo el string que obtuve, listo para escribir en la proxima linea el proximo objeto.
+                    fwrite($archivo,$string);
+                }
+                else
+                {
+                    $escrituraSalioBien = false;
+                    return $escrituraSalioBien;          
+                }
+            }
+
+            //Finalmente, cierro el archivo para que se guarden los cambios.
+            fclose($archivo);
+        }
+        else
+        {
+            $escrituraSalioBien = false;
+        }
+        
+        return $escrituraSalioBien;
+    }
+
+    public static function EscribirAccionesCSV (string $path, $arrayObjetos)
+    {
+        $escrituraSalioBien = true;
+
+        if ($path != null && $arrayObjetos != null)
+        {
+            //Abro el archivo (Modo escritura desde 0) ("w") (Me guardo la direc. de mem. del archivo)
+            $archivo;
+            $archivo = fopen($path,"w");
+
+            //Mi variable string que seria como un "Stringbuilder de C#"
+            $string;
+
+            //Por cada objeto que tenga en mi lista
+            foreach ($arrayObjetos as $objeto) 
+            {
+                //Voy a concatenar todas mis propiedades del objeto a las ',' y finalmente a un '\n' expresado como PHP.EOL
+                
+                if (is_null($objeto) == false)
+                {
+                    //====================== ESTRUCTURA ORDENADA DEL OBJETO EN EL ARCHIVO CSV =================================================
+                    // El orden de los campos en coma.
+                    // mensajeFinal - exito - tipo - hora - idUsuarioResponsable - idUsuario - idVenta - fechaAlta - fechaModificacion - fechaBaja
+                    //=========================================================================================================================
+
+                    //======== IMPORTANTE CAMBIAR ESTA LINEA EN CUESTION DEL OBJETO QUE SE USE =========== (PHP.EOL persiste.)
+                    $string = $objeto->mensajeFinal . "," . $objeto->exito . "," .  $objeto->tipo . "," . 
+                    $objeto->hora . "," . $objeto->idUsuarioResponsable . ",". $objeto->idUsuario . "." .
+                    $objeto->idProducto . "." . $objeto->idMesa . "." . $objeto->idPedido . "." . 
+                    $objeto->idVenta . "." . $objeto->fechaAlta . "," . $objeto->fechaModificacion . "," .
+                    $objeto->fechaBaja .PHP_EOL;
+                    //======== IMPORTANTE CAMBIAR ESTA LINEA EN CUESTION DEL OBJETO QUE SE USE =========== (PHP.EOL persiste.)
+
+                    //Escribo finalmente en el archivo el string que obtuve, listo para escribir en la proxima linea el proximo objeto.
+                    fwrite($archivo,$string);
+                }
+                else
+                {
+                    $escrituraSalioBien = false;
+                    return $escrituraSalioBien;          
+                }
+            }
+
+            //Finalmente, cierro el archivo para que se guarden los cambios.
+            fclose($archivo);
+        }
+        else
+        {
+            $escrituraSalioBien = false;
+        }
+        
+        return $escrituraSalioBien;
+    }
+
+    public static function EscribirPedidosCSV (string $path, $arrayObjetos)
+    {
+        $escrituraSalioBien = true;
+
+        if ($path != null && $arrayObjetos != null)
+        {
+            //Abro el archivo (Modo escritura desde 0) ("w") (Me guardo la direc. de mem. del archivo)
+            $archivo;
+            $archivo = fopen($path,"w");
+
+            //Mi variable string que seria como un "Stringbuilder de C#"
+            $string;
+
+            //Por cada objeto que tenga en mi lista
+            foreach ($arrayObjetos as $objeto) 
+            {
+                //Voy a concatenar todas mis propiedades del objeto a las ',' y finalmente a un '\n' expresado como PHP.EOL
+                
+                if (is_null($objeto) == false)
+                {
+                    //====================== ESTRUCTURA ORDENADA DEL OBJETO EN EL ARCHIVO CSV =======================================================================================================================
+                    // El orden de los campos en coma.
+                    // codigoAlfanumerico - codigoAlfaNumericoMesa - precioTotal - estado - minutosEstimados - nroMesa - nombreCliente - pathFoto - idMesa - idUsuario - fechaAlta - fechaModificacion - fechaBaja
+                    //======================================================================================================================================================================================================
+
+                    //======== IMPORTANTE CAMBIAR ESTA LINEA EN CUESTION DEL OBJETO QUE SE USE =========== (PHP.EOL persiste.)
+                    $string = $objeto->codigoAlfaNumerico . "," . $objeto->codigoAlfaNumericoMesa . "," .  $objeto->precioTotal . "," . 
+                    $objeto->estado . "," . $objeto->minutosEstimados . ",". $objeto->nroMesa . "." .
+                    $objeto->nombreCliente . "." . $objeto->pathFoto . "." . $objeto->idMesa . "." . 
+                    $objeto->idUsuario . "." . $objeto->fechaAlta . "," . $objeto->fechaModificacion . "," .
+                    $objeto->fechaBaja .PHP_EOL;
+                    //======== IMPORTANTE CAMBIAR ESTA LINEA EN CUESTION DEL OBJETO QUE SE USE =========== (PHP.EOL persiste.)
+
+                    //Escribo finalmente en el archivo el string que obtuve, listo para escribir en la proxima linea el proximo objeto.
+                    fwrite($archivo,$string);
+                }
+                else
+                {
+                    $escrituraSalioBien = false;
+                    return $escrituraSalioBien;          
+                }
+            }
+
+            //Finalmente, cierro el archivo para que se guarden los cambios.
+            fclose($archivo);
+        }
+        else
+        {
+            $escrituraSalioBien = false;
+        }
+        
+        return $escrituraSalioBien;
+    }
+
+    public static function EscribirMesasCSV (string $path, $arrayObjetos)
+    {
+        $escrituraSalioBien = true;
+
+        if ($path != null && $arrayObjetos != null)
+        {
+            //Abro el archivo (Modo escritura desde 0) ("w") (Me guardo la direc. de mem. del archivo)
+            $archivo;
+            $archivo = fopen($path,"w");
+
+            //Mi variable string que seria como un "Stringbuilder de C#"
+            $string;
+
+            //Por cada objeto que tenga en mi lista
+            foreach ($arrayObjetos as $objeto) 
+            {
+                //Voy a concatenar todas mis propiedades del objeto a las ',' y finalmente a un '\n' expresado como PHP.EOL
+                
+                if (is_null($objeto) == false)
+                {
+                    //====================== ESTRUCTURA ORDENADA DEL OBJETO EN EL ARCHIVO CSV ========================================
+                    // El orden de los campos en coma.
+                    // numero - estado - precioTotal - descripcion - codigoAlfanumerico - fechaAlta - fechaModificacion - fechaBaja
+                    //================================================================================================================
+
+                    //======== IMPORTANTE CAMBIAR ESTA LINEA EN CUESTION DEL OBJETO QUE SE USE =========== (PHP.EOL persiste.)
+                    $string = $objeto->numero . "," . $objeto->estado . "," .  $objeto->descripcion . "," . 
+                    $objeto->codigoAlfanumerico . "," . $objeto->fechaAlta . "," . $objeto->fechaModificacion . "," .
+                    $objeto->fechaBaja .PHP_EOL;
+                    //======== IMPORTANTE CAMBIAR ESTA LINEA EN CUESTION DEL OBJETO QUE SE USE =========== (PHP.EOL persiste.)
+
+                    //Escribo finalmente en el archivo el string que obtuve, listo para escribir en la proxima linea el proximo objeto.
+                    fwrite($archivo,$string);
+                }
+                else
+                {
+                    $escrituraSalioBien = false;
+                    return $escrituraSalioBien;          
+                }
+            }
+
+            //Finalmente, cierro el archivo para que se guarden los cambios.
+            fclose($archivo);
+        }
+        else
+        {
+            $escrituraSalioBien = false;
+        }
+        
+        return $escrituraSalioBien;
+    }
 }
 ?>

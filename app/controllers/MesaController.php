@@ -12,12 +12,13 @@ class MesaController implements IApiUsable
         //---------------------- TOKEN USER DATA -------------------------------------------//
         $idUsuarioResponsable = AutentificadorJWT::DevolverIdUserResponsable($request);
         $tipoUsuarioResponsable = AutentificadorJWT::DevolverTipoUserResponsable($request);
+        $estadoUsuarioResponsable = AutentificadorJWT::DevolverEstadoUserResponsable($request);
         //----------------------------------------------------------------------------------//
 
         //------------------------USUARIOS AUTORIZADOS A REALIZAR LA ACCION-----------------//
         // PERMISOS DE ACCION: socio
         //----------------------------------------------------------------------------------//
-        if ($tipoUsuarioResponsable == "socio")
+        if ($tipoUsuarioResponsable == "socio" && $estadoUsuarioResponsable == "activo")
         {
             //Recibo el body del form-data en forma de array asociativo.
             $parametros = $request->getParsedBody();
@@ -26,28 +27,42 @@ class MesaController implements IApiUsable
             $estadoRecibido = $parametros['estado'];
             $descripcionRecibida = $parametros['descripcion'];
 
-            //Creo el codigo alfanumerico de la mesa.
-            $permitted_chars = '0123456789abcdefghijklmnopqrstuvwxyz';
-            $codigoAlfanumericoCreado = substr(str_shuffle($permitted_chars), 0, 10);
+            $resultadoValidacionNumero = Validaciones::validarNumero_Mesa($numeroRecibido);
+            $resultadoValidacionEstado = Validaciones::validarEstado_Mesa($estadoRecibido);
+            $resultadoValidacionDescripcion = Validaciones::validarDescripcion_Mesa($descripcionRecibida);
 
-            // Creo la mesa y asigno sus correspondientes datos.
-            $mesaCreada = new Mesa();
+            if ($resultadoValidacionNumero == true && $resultadoValidacionEstado == true && $resultadoValidacionDescripcion == true)
+            {
+                //Creo el codigo alfanumerico de la mesa.
+                $permitted_chars = '0123456789abcdefghijklmnopqrstuvwxyz';
+                $codigoAlfanumericoCreado = substr(str_shuffle($permitted_chars), 0, 10);
 
-            $mesaCreada->numero = $numeroRecibido;
-            $mesaCreada->estado = $estadoRecibido;
-            $mesaCreada->descripcion = $descripcionRecibida;
-            $mesaCreada->codigoAlfanumerico = $codigoAlfanumericoCreado;
+                // Creo la mesa y asigno sus correspondientes datos.
+                $mesaCreada = new Mesa();
 
-            //El ORM guarda automaticamente la mesa en la DB.
-            $mesaCreada->save();
+                $mesaCreada->numero = $numeroRecibido;
+                $mesaCreada->estado = $estadoRecibido;
+                $mesaCreada->descripcion = $descripcionRecibida;
+                $mesaCreada->codigoAlfanumerico = $codigoAlfanumericoCreado;
 
-            //------------------------- RECOPILACION LA INFORMACION DE LA ACCION REALIZADA Y SU RESULTADO --------------------------------//
-            //Retorno la respuesta con el body escrito el cual contiene el mensaje de la accion, si hubo o no exito y todos los ids de
-            //las entidades involucradas en la accion con un valor cargado, en su defecto, nulo.
-            $payload = json_encode(array("mensajeFinal" => "Mesa creada con exito",
-            "exito" => "exitoso","tipo" => "alta","hora" => date('h:i:s'),"idUsuarioResponsable" => $idUsuarioResponsable, 
-            "idUsuario" => null,"idProducto" => null, "idMesa" => $mesaCreada->id, "idPedido" => null,"idVenta" => null));
-            //-----------------------------------------------------------------------------------------------------------------------------//
+                //El ORM guarda automaticamente la mesa en la DB.
+                $mesaCreada->save();
+
+                //------------------------- RECOPILACION LA INFORMACION DE LA ACCION REALIZADA Y SU RESULTADO --------------------------------//
+                //Retorno la respuesta con el body escrito el cual contiene el mensaje de la accion, si hubo o no exito y todos los ids de
+                //las entidades involucradas en la accion con un valor cargado, en su defecto, nulo.
+                $payload = json_encode(array("mensajeFinal" => "Mesa creada con exito",
+                "exito" => "exitoso","tipo" => "alta","hora" => date('h:i:s'),"idUsuarioResponsable" => $idUsuarioResponsable, 
+                "idUsuario" => null,"idProducto" => null, "idMesa" => $mesaCreada->id, "idPedido" => null,"idVenta" => null));
+                //-----------------------------------------------------------------------------------------------------------------------------//
+            }
+            else
+            {
+                $payload = json_encode(array("mensajeFinal" => "Mesa creada sin exito. Hubo algun dato invalido.",
+                "exito" => "fallido","tipo" => "alta","hora" => date('h:i:s'),
+                "idUsuarioResponsable" => null, "idUsuario" => null,
+                "idProducto" => null, "idMesa" => null, "idPedido" => null,"idVenta" => null));
+            } 
         }
         else
         {
@@ -65,12 +80,13 @@ class MesaController implements IApiUsable
         //---------------------- TOKEN USER DATA -------------------------------------------//
         $idUsuarioResponsable = AutentificadorJWT::DevolverIdUserResponsable($request);
         $tipoUsuarioResponsable = AutentificadorJWT::DevolverTipoUserResponsable($request);
+        $estadoUsuarioResponsable = AutentificadorJWT::DevolverEstadoUserResponsable($request);
         //----------------------------------------------------------------------------------//
 
         //------------------------USUARIOS AUTORIZADOS A REALIZAR LA ACCION-----------------//
         // PERMISOS DE ACCION: socio
         //----------------------------------------------------------------------------------//
-        if ($tipoUsuarioResponsable == "socio")
+        if ($tipoUsuarioResponsable == "socio" && $estadoUsuarioResponsable == "activo")
         {
             //Recibo la ID por el "link".
             $idRecibida = $args['id'];
@@ -111,13 +127,14 @@ class MesaController implements IApiUsable
         //---------------------- TOKEN USER DATA -------------------------------------------//
         $idUsuarioResponsable = AutentificadorJWT::DevolverIdUserResponsable($request);
         $tipoUsuarioResponsable = AutentificadorJWT::DevolverTipoUserResponsable($request);
+        $estadoUsuarioResponsable = AutentificadorJWT::DevolverEstadoUserResponsable($request);
         //----------------------------------------------------------------------------------//
  
         //------------------------USUARIOS AUTORIZADOS A REALIZAR LA ACCION-----------------//
         // PERMISOS DE ACCION: socio y mozo (solo a estado = cerrada)
         //----------------------------------------------------------------------------------//
 
-        if ($tipoUsuarioResponsable == "socio" || $tipoUsuarioResponsable == "mozo")
+        if (($tipoUsuarioResponsable == "socio" || $tipoUsuarioResponsable == "mozo") == true && $estadoUsuarioResponsable == "activo")
         {
             //Recibo la ID por el "link".
             $id = $args['id'];
@@ -134,12 +151,23 @@ class MesaController implements IApiUsable
                 $estadoRecibido = $body['estado'];
                 $descripcionRecibida = $body['descripcion'];
 
-                //Si se intenta cambiar el estado de la mesa a "cerrada" y el que lo esta cambiando es un mozo. Error. No puede.
-                if ($estadoRecibido == "cerrada" && $tipoUsuarioResponsable == "mozo")
+                //SE VALIDA QUE SI EL CAMBIO DE ESTADO ES A CERRADA Y ES UN MOZO, TAMPOCO ES VALIDO.
+
+                //Si se intenta cambiar el estado de la mesa a "cerrada" y el que lo esta cambiando es un mozo. Error. No puede.(Tambien sera error si ninguno
+                //de los estados a los que se intenta cambiar son los definidos.)
+                //Tambien sera invalido si el que realiza la accion no es un mozo ni un socio.
+
+                $resultadoValidacionNumero = Validaciones::validarNumero_Mesa($numeroRecibido);
+                $resultadoValidacionEstado = Validaciones::validarEstado_Mesa($estadoRecibido);
+                $resultadoValidacionDescripcion = Validaciones::validarDescripcion_Mesa($descripcionRecibida);
+
+                if ($resultadoValidacionDescripcion == false && $resultadoValidacionEstado == false && $resultadoValidacionNumero == false && 
+                ($estadoRecibido == "cerrada" && $tipoUsuarioResponsable == "mozo") == true ||
+                ($tipoUsuarioResponsable != "mozo" && $tipoUsuarioResponsable != "socio") == true)
                 {
                     $horaActual = date('h:i:s');
 
-                    $payload = json_encode(array("mensajeFinal" => "Mesa modificada sin exito. No se encontro la mesa a modificar.",
+                    $payload = json_encode(array("mensajeFinal" => "Mesa modificada sin exito. La modificacion del estado es invalida.",
                     "exito" => "fallido","tipo" => "modificacion","hora" => $horaActual,"idUsuarioResponsable" => $idUsuarioResponsable, 
                     "idUsuario" => null,"idProducto" => null, "idMesa" => null, "idPedido" => null,"idVenta" => null));
 
@@ -191,12 +219,13 @@ class MesaController implements IApiUsable
         //---------------------- TOKEN USER DATA -------------------------------------------//
         $idUsuarioResponsable = AutentificadorJWT::DevolverIdUserResponsable($request);
         $tipoUsuarioResponsable = AutentificadorJWT::DevolverTipoUserResponsable($request);
+        $estadoUsuarioResponsable = AutentificadorJWT::DevolverEstadoUserResponsable($request);
         //----------------------------------------------------------------------------------//
 
         //------------------------USUARIOS AUTORIZADOS A REALIZAR LA ACCION-----------------//
         // PERMISOS DE ACCION: socio y mozo
         //----------------------------------------------------------------------------------//
-        if ($tipoUsuarioResponsable == "socio" || $tipoUsuarioResponsable == "mozo")
+        if (($tipoUsuarioResponsable == "socio" || $tipoUsuarioResponsable == "mozo") == true && $estadoUsuarioResponsable == "activo")
         {
             //Me traigo a todas las mesas.
             $listaMesas = App\Models\Mesa::all();
@@ -237,12 +266,13 @@ class MesaController implements IApiUsable
         //---------------------- TOKEN USER DATA -------------------------------------------//
         $idUsuarioResponsable = AutentificadorJWT::DevolverIdUserResponsable($request);
         $tipoUsuarioResponsable = AutentificadorJWT::DevolverTipoUserResponsable($request);
+        $estadoUsuarioResponsable = AutentificadorJWT::DevolverEstadoUserResponsable($request);
         //----------------------------------------------------------------------------------//
 
         //------------------------USUARIOS AUTORIZADOS A REALIZAR LA ACCION-----------------//
         // PERMISOS DE ACCION: socio y mozo
         //----------------------------------------------------------------------------------//
-        if ($tipoUsuarioResponsable == "socio" || $tipoUsuarioResponsable == "mozo")
+        if (($tipoUsuarioResponsable == "socio" || $tipoUsuarioResponsable == "mozo") == true && $estadoUsuarioResponsable == "activo")
         {
             //Recibo la ID por el "link".
             $idRecibido = $args['id'];

@@ -71,6 +71,8 @@ class Logger
                 "idUsuario" => null,"idProducto" => null, "idMesa" => null, 
                 "idPedido" => null,"idVenta" => null)); 
 
+                echo($e);
+
                 $response->getBody()->write($payload);
                 Saver::GuardarAccion($response);
                 return $response->withHeader('Content-Type', 'application/json');

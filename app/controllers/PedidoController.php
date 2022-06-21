@@ -3,9 +3,17 @@ require_once './models/Pedido.php';
 require_once './models/Venta.php';
 require_once './models/Usuario.php';
 require_once './models/Producto.php';
+require_once './models/Mesa.php';
+require_once './models/Encuesta.php';
+require_once './models/Validaciones.php';
+
 require_once './interfaces/IApiUsable.php';
+
 use \App\Models\Pedido as Pedido;
 use \App\Models\Venta as Venta;
+use \App\Models\Mesa as Mesa;
+use \App\Models\Encuesta as Encuesta;
+
 date_default_timezone_set("America/Buenos_Aires");
 
 class PedidoController implements IApiUsable
@@ -16,12 +24,13 @@ class PedidoController implements IApiUsable
         //---------------------- TOKEN USER DATA -------------------------------------------//
         $idUsuarioResponsable = AutentificadorJWT::DevolverIdUserResponsable($request);
         $tipoUsuarioResponsable = AutentificadorJWT::DevolverTipoUserResponsable($request);
+        $estadoUsuarioResponsable = AutentificadorJWT::DevolverEstadoUserResponsable($request);
         //----------------------------------------------------------------------------------//
 
         //------------------------USUARIOS AUTORIZADOS A REALIZAR LA ACCION-----------------//
         // PERMISOS DE ACCION: socio
         //----------------------------------------------------------------------------------//
-        if ($tipoUsuarioResponsable == "socio" || $tipoUsuarioResponsable == "mozo")
+        if (($tipoUsuarioResponsable == "socio" || $tipoUsuarioResponsable == "mozo") == true && $estadoUsuarioResponsable == "activo")
         {
             //Leo el json "RAW" de Postman y hago el decode de los datos nuevos para leer los productos del pedido.
             $body = json_decode(file_get_contents("php://input"), true);
@@ -31,112 +40,125 @@ class PedidoController implements IApiUsable
             $nombreClienteRecibido = $body['nombreCliente'];
             $productosPedidos = $body['productosPedidos'];
 
-            //Busco la ID recibida y me guardo a la mesa encontrada si es que se encontró alguna.
-            $mesaEncontrada = App\Models\Mesa::find($idMesaRecibido);
+            $resultadoValidacionIDMesa = Validaciones::validarIDMesa_Pedido($idMesaRecibido);
+            $resultadoValidacionNombreCliente = Validaciones::validarNombreCliente_Pedido($nombreClienteRecibido);
+            $resultadoValidacionProductosPedidos = Validaciones::validarProductosPedidos_Pedido($productosPedidos);
 
-            // Valido la lista de productos adquiridos en el pedido, si cada uno de ellos tiene el stock suficiente para la cantidad 
-            // que se desea adquirir. ---> Le paso el array asociativo de productos recibido por body
-            $validacionTotalDeProductos = $this->validarTotalmenteProductosPedidos($productosPedidos);
-
-            //Valido si todos los productos de la lista tienen una persona en su correspondiente area para hacerse cargo. 
-            $validacionDisponibilidadPersonal = $this->validacionDisponibilidadPersonal($productosPedidos);
-
-            //TIENE QUE SI O SI HABER UN USUARIO, UNA MESA Y MINIMO UN PRODUCTO O MAS.
-            if ($mesaEncontrada != null && count($productosPedidos) > 0 && $validacionTotalDeProductos == 0 && $validacionDisponibilidadPersonal == 0)
+            if ($resultadoValidacionIDMesa == true && $resultadoValidacionNombreCliente == true && $resultadoValidacionProductosPedidos == true)
             {
+                //Busco la ID recibida y me guardo a la mesa encontrada si es que se encontró alguna.
+                $mesaEncontrada = App\Models\Mesa::find($idMesaRecibido);
 
-                //-------------------------------- CREACION DEL PEDIDO ---------------------------------------------//
+                // Valido la lista de productos adquiridos en el pedido, si cada uno de ellos tiene el stock suficiente para la cantidad 
+                // que se desea adquirir. ---> Le paso el array asociativo de productos recibido por body
+                $validacionTotalDeProductos = $this->validarTotalmenteProductosPedidos($productosPedidos);
+
+                //Valido si todos los productos de la lista tienen una persona en su correspondiente area para hacerse cargo. 
+                $validacionDisponibilidadPersonal = $this->validacionDisponibilidadPersonal($productosPedidos);
+
+                //TIENE QUE SI O SI HABER UN USUARIO, UNA MESA Y MINIMO UN PRODUCTO O MAS.
+                if ($mesaEncontrada != null && count($productosPedidos) > 0 && $validacionTotalDeProductos == 0 && $validacionDisponibilidadPersonal == 0)
+                {
+
+                    //-------------------------------- CREACION DEL PEDIDO ---------------------------------------------//
+                    
+                    //Creo el codigo alfanumerico del pedido.
+                    $permitted_chars = '0123456789abcdefghijklmnopqrstuvwxyz';
+                    $codigoAlfanumericoCreado = substr(str_shuffle($permitted_chars), 0, 10);
+
+                    //Calculo el precio total en cuestion de los productos recibidos y el tiempo estimado.
+                    $precioTotalCalculado = $this->calcularPrecioTotal($productosPedidos);
+                    $tiempoEstimadoCalculado = $this->calcularTiempoEstimado($productosPedidos);
+            
+                    // Creo el pedido y asigno sus correspondientes datos.
+                    $pedidoCreado = new Pedido();
+
+                    $pedidoCreado->codigoAlfanumerico = $codigoAlfanumericoCreado;
+                    $pedidoCreado->codigoAlfanumericoMesa = $mesaEncontrada->codigoAlfanumerico;
+                    $pedidoCreado->estado = "pendiente";
+                    $pedidoCreado->precioTotal = $precioTotalCalculado;
+                    $pedidoCreado->minutosEstimados = $tiempoEstimadoCalculado;
+                    $pedidoCreado->nroMesa = $mesaEncontrada->numero;
+                    $pedidoCreado->nombreCliente = $nombreClienteRecibido;
+                    $pedidoCreado->idMesa = $mesaEncontrada->id;
+                    $pedidoCreado->idUsuario = $idUsuarioResponsable;
+
+                    //El ORM guarda automaticamente el pedido en la DB.
+                    $pedidoCreado->save();
+
+                    //-------------------- CREACION DE LAS VENTAS DEL PEDIDO POR CADA PRODUCTO PEDIDO ------------------//
+
+                    $this->crear_y_GuardarVentasPorCadaProducto($productosPedidos, $pedidoCreado);
+
+                    $payload = json_encode(array("mensajeFinal" => "Pedido creado con exito.",
+                    "exito" => "exitoso","tipo" => "alta","hora" => date('h:i:s'),"idUsuarioResponsable" => $idUsuarioResponsable, 
+                    "idUsuario" => null,"idProducto" => null, "idMesa" => null, "idPedido" => $pedidoCreado->id,"idVenta" => null));
+                }
+                else
+                {
+                    if ($mesaEncontrada == null)
+                    {
+                        $payload = json_encode(array("mensajeFinal" => "El pedido no puede realizarse. No se encontro la mesa.",
+                        "exito" => "fallido","tipo" => "alta","hora" => date('h:i:s'),"idUsuarioResponsable" => $idUsuarioResponsable, 
+                        "idUsuario" => null,"idProducto" => null, "idMesa" => null, "idPedido" => null,"idVenta" => null));
+                    }
                 
-                //Creo el codigo alfanumerico del pedido.
-                $permitted_chars = '0123456789abcdefghijklmnopqrstuvwxyz';
-                $codigoAlfanumericoCreado = substr(str_shuffle($permitted_chars), 0, 10);
+                    switch ($validacionTotalDeProductos) 
+                    {
+                        case "-1":
+                        {
+                            $payload = json_encode(array("mensajeFinal" => "El pedido no puede realizarse. Hay al menos un producto invalido...",
+                            "exito" => "fallido","tipo" => "alta","hora" => date('h:i:s'),"idUsuarioResponsable" => $idUsuarioResponsable, 
+                            "idUsuario" => null,"idProducto" => null, "idMesa" => null, "idPedido" => null,"idVenta" => null));
+                            break;
+                        }
+                        case "-2":
+                        {
+                            $payload = json_encode(array("mensajeFinal" => "El pedido no puede realizarse. Hay al menos un producto insuficiente...",
+                            "exito" => "fallido","tipo" => "alta","hora" => date('h:i:s'),"idUsuarioResponsable" => $idUsuarioResponsable, 
+                            "idUsuario" => null,"idProducto" => null, "idMesa" => null, "idPedido" => null,"idVenta" => null));
+                            break;
+                        }
+                        case "-3":
+                        {
+                            $payload = json_encode(array("mensajeFinal" => "El pedido no puede realizarse. Hay al menos un producto inexistente...",
+                            "exito" => "fallido","tipo" => "alta","hora" => date('h:i:s'),"idUsuarioResponsable" => $idUsuarioResponsable, 
+                            "idUsuario" => null,"idProducto" => null, "idMesa" => null, "idPedido" => null,"idVenta" => null));
+                            break;
+                        }
+                    }
 
-                //Calculo el precio total en cuestion de los productos recibidos y el tiempo estimado.
-                $precioTotalCalculado = $this->calcularPrecioTotal($productosPedidos);
-                $tiempoEstimadoCalculado = $this->calcularTiempoEstimado($productosPedidos);
-        
-                // Creo el pedido y asigno sus correspondientes datos.
-                $pedidoCreado = new Pedido();
-
-                $pedidoCreado->codigoAlfanumerico = $codigoAlfanumericoCreado;
-                $pedidoCreado->codigoAlfanumericoMesa = $mesaEncontrada->codigoAlfanumerico;
-                $pedidoCreado->estado = "pendiente";
-                $pedidoCreado->precioTotal = $precioTotalCalculado;
-                $pedidoCreado->minutosEstimados = $tiempoEstimadoCalculado;
-                $pedidoCreado->nroMesa = $mesaEncontrada->numero;
-                $pedidoCreado->nombreCliente = $nombreClienteRecibido;
-                $pedidoCreado->idMesa = $mesaEncontrada->id;
-                $pedidoCreado->idUsuario = $idUsuarioResponsable;
-
-                //El ORM guarda automaticamente el pedido en la DB.
-                $pedidoCreado->save();
-
-                //-------------------- CREACION DE LAS VENTAS DEL PEDIDO POR CADA PRODUCTO PEDIDO ------------------//
-
-                $this->crear_y_GuardarVentasPorCadaProducto($productosPedidos, $pedidoCreado);
-
-                $payload = json_encode(array("mensajeFinal" => "Pedido creado con exito.",
-                "exito" => "exitoso","tipo" => "alta","hora" => date('h:i:s'),"idUsuarioResponsable" => $idUsuarioResponsable, 
-                "idUsuario" => null,"idProducto" => null, "idMesa" => null, "idPedido" => $pedidoCreado->id,"idVenta" => null));
+                    switch ($validacionDisponibilidadPersonal) 
+                    {
+                        case '-1':
+                        {
+                            $payload = json_encode(array("mensajeFinal" => "El pedido no puede realizarse. Falta al menos un cervezero...",
+                            "exito" => "fallido","tipo" => "alta","hora" => date('h:i:s'),"idUsuarioResponsable" => $idUsuarioResponsable, 
+                            "idUsuario" => null,"idProducto" => null, "idMesa" => null, "idPedido" => null,"idVenta" => null));
+                            break;
+                        }
+                        case '-2':
+                        {
+                            $payload = json_encode(array("mensajeFinal" => "El pedido no puede realizarse. Falta al menos un bartender...",
+                            "exito" => "fallido","tipo" => "alta","hora" => date('h:i:s'),"idUsuarioResponsable" => $idUsuarioResponsable, 
+                            "idUsuario" => null,"idProducto" => null, "idMesa" => null, "idPedido" => null,"idVenta" => null));
+                            break;
+                        }
+                        case '-3':
+                        {
+                            $payload = json_encode(array("mensajeFinal" => "El pedido no puede realizarse. Falta al menos un cocinero...",
+                            "exito" => "fallido","tipo" => "alta","hora" => date('h:i:s'),"idUsuarioResponsable" => $idUsuarioResponsable, 
+                            "idUsuario" => null,"idProducto" => null, "idMesa" => null, "idPedido" => null,"idVenta" => null));
+                            break;
+                        }
+                    }
+                }
             }
             else
             {
-                if ($mesaEncontrada == null)
-                {
-                    $payload = json_encode(array("mensajeFinal" => "El pedido no puede realizarse. No se encontro la mesa.",
-                    "exito" => "fallido","tipo" => "alta","hora" => date('h:i:s'),"idUsuarioResponsable" => $idUsuarioResponsable, 
-                    "idUsuario" => null,"idProducto" => null, "idMesa" => null, "idPedido" => null,"idVenta" => null));
-                }
-            
-                switch ($validacionTotalDeProductos) 
-                {
-                    case "-1":
-                    {
-                        $payload = json_encode(array("mensajeFinal" => "El pedido no puede realizarse. Hay al menos un producto invalido...",
-                        "exito" => "fallido","tipo" => "alta","hora" => date('h:i:s'),"idUsuarioResponsable" => $idUsuarioResponsable, 
-                        "idUsuario" => null,"idProducto" => null, "idMesa" => null, "idPedido" => null,"idVenta" => null));
-                        break;
-                    }
-                    case "-2":
-                    {
-                        $payload = json_encode(array("mensajeFinal" => "El pedido no puede realizarse. Hay al menos un producto insuficiente...",
-                        "exito" => "fallido","tipo" => "alta","hora" => date('h:i:s'),"idUsuarioResponsable" => $idUsuarioResponsable, 
-                        "idUsuario" => null,"idProducto" => null, "idMesa" => null, "idPedido" => null,"idVenta" => null));
-                        break;
-                    }
-                    case "-3":
-                    {
-                        $payload = json_encode(array("mensajeFinal" => "El pedido no puede realizarse. Hay al menos un producto inexistente...",
-                        "exito" => "fallido","tipo" => "alta","hora" => date('h:i:s'),"idUsuarioResponsable" => $idUsuarioResponsable, 
-                        "idUsuario" => null,"idProducto" => null, "idMesa" => null, "idPedido" => null,"idVenta" => null));
-                        break;
-                    }
-                }
-
-                switch ($validacionDisponibilidadPersonal) 
-                {
-                    case '-1':
-                    {
-                        $payload = json_encode(array("mensajeFinal" => "El pedido no puede realizarse. Falta al menos un cervezero...",
-                        "exito" => "fallido","tipo" => "alta","hora" => date('h:i:s'),"idUsuarioResponsable" => $idUsuarioResponsable, 
-                        "idUsuario" => null,"idProducto" => null, "idMesa" => null, "idPedido" => null,"idVenta" => null));
-                        break;
-                    }
-                    case '-2':
-                    {
-                        $payload = json_encode(array("mensajeFinal" => "El pedido no puede realizarse. Falta al menos un bartender...",
-                        "exito" => "fallido","tipo" => "alta","hora" => date('h:i:s'),"idUsuarioResponsable" => $idUsuarioResponsable, 
-                        "idUsuario" => null,"idProducto" => null, "idMesa" => null, "idPedido" => null,"idVenta" => null));
-                        break;
-                    }
-                    case '-3':
-                    {
-                        $payload = json_encode(array("mensajeFinal" => "El pedido no puede realizarse. Falta al menos un cocinero...",
-                        "exito" => "fallido","tipo" => "alta","hora" => date('h:i:s'),"idUsuarioResponsable" => $idUsuarioResponsable, 
-                        "idUsuario" => null,"idProducto" => null, "idMesa" => null, "idPedido" => null,"idVenta" => null));
-                        break;
-                    }
-                }
+                $payload = json_encode(array("mensajeFinal" => "El pedido no puede crearse. Algun dato ingresado es invalido.",
+                "exito" => "fallido","tipo" => "alta","hora" => date('h:i:s'),"idUsuarioResponsable" => $idUsuarioResponsable, 
+                "idUsuario" => null,"idProducto" => null, "idMesa" => null, "idPedido" => null,"idVenta" => null));
             }
         }
         else
@@ -156,12 +178,13 @@ class PedidoController implements IApiUsable
         //---------------------- TOKEN USER DATA -------------------------------------------//
         $idUsuarioResponsable = AutentificadorJWT::DevolverIdUserResponsable($request);
         $tipoUsuarioResponsable = AutentificadorJWT::DevolverTipoUserResponsable($request);
+        $estadoUsuarioResponsable = AutentificadorJWT::DevolverEstadoUserResponsable($request);
         //----------------------------------------------------------------------------------//
 
         //------------------------USUARIOS AUTORIZADOS A REALIZAR LA ACCION-----------------//
         // PERMISOS DE ACCION: socio 
         //----------------------------------------------------------------------------------//
-        if ($tipoUsuarioResponsable == "socio")
+        if ($tipoUsuarioResponsable == "socio" && $estadoUsuarioResponsable == "activo")
         {
             //Recibo la ID por el "link".
             $idRecibida = $args['id'];
@@ -205,12 +228,14 @@ class PedidoController implements IApiUsable
         //---------------------- TOKEN USER DATA -------------------------------------------//
         $idUsuarioResponsable = AutentificadorJWT::DevolverIdUserResponsable($request);
         $tipoUsuarioResponsable = AutentificadorJWT::DevolverTipoUserResponsable($request);
+        $estadoUsuarioResponsable = AutentificadorJWT::DevolverEstadoUserResponsable($request);
         //----------------------------------------------------------------------------------//
 
         //------------------------USUARIOS AUTORIZADOS A REALIZAR LA ACCION-----------------//
         // PERMISOS DE ACCION: socio y mozo
         //----------------------------------------------------------------------------------//
-        if ($tipoUsuarioResponsable == "socio" || $tipoUsuarioResponsable == "mozo")
+
+        if (($tipoUsuarioResponsable == "socio" || $tipoUsuarioResponsable == "mozo") == true && $estadoUsuarioResponsable == "activo")
         {
             //pendiente - cancelado - entregado
 
@@ -226,8 +251,9 @@ class PedidoController implements IApiUsable
             if ($pedidoEncontrado != null)
             {
                 $estadoRecibido = $body['estado'];
+                $resultadoValidacionEstado = Validaciones::validarEstado_Pedido($estadoRecibido);
 
-                if ($estadoRecibido == "cancelado" || $estadoRecibido == "pendiente" && $estadoRecibido == "entregado")
+                if ($resultadoValidacionEstado == true)
                 {
                     //Piso los datos 'viejos' por los 'nuevos' datos del pedido a modificar.
                     $pedidoEncontrado->estado = $estadoRecibido;
@@ -275,12 +301,13 @@ class PedidoController implements IApiUsable
         //---------------------- TOKEN USER DATA -------------------------------------------//
         $idUsuarioResponsable = AutentificadorJWT::DevolverIdUserResponsable($request);
         $tipoUsuarioResponsable = AutentificadorJWT::DevolverTipoUserResponsable($request);
+        $estadoUsuarioResponsable = AutentificadorJWT::DevolverEstadoUserResponsable($request);
         //----------------------------------------------------------------------------------//
 
         //------------------------USUARIOS AUTORIZADOS A REALIZAR LA ACCION-----------------//
         // PERMISOS DE ACCION: socio y mozo
         //----------------------------------------------------------------------------------//
-        if ($tipoUsuarioResponsable == "socio" || $tipoUsuarioResponsable == "mozo")
+        if (($tipoUsuarioResponsable == "socio" || $tipoUsuarioResponsable == "mozo") == true && $estadoUsuarioResponsable == "activo")
         {
             //Me traigo a todos los pedidos.
             $listaPedidos = App\Models\Pedido::all();
@@ -323,12 +350,13 @@ class PedidoController implements IApiUsable
         //---------------------- TOKEN USER DATA -------------------------------------------//
         $idUsuarioResponsable = AutentificadorJWT::DevolverIdUserResponsable($request);
         $tipoUsuarioResponsable = AutentificadorJWT::DevolverTipoUserResponsable($request);
+        $estadoUsuarioResponsable = AutentificadorJWT::DevolverEstadoUserResponsable($request);
         //----------------------------------------------------------------------------------//
 
         //------------------------USUARIOS AUTORIZADOS A REALIZAR LA ACCION-----------------//
         // PERMISOS DE ACCION: socio y mozo
         //----------------------------------------------------------------------------------//
-        if ($tipoUsuarioResponsable == "socio" || $tipoUsuarioResponsable == "mozo")
+        if (($tipoUsuarioResponsable == "socio" || $tipoUsuarioResponsable == "mozo") == true && $estadoUsuarioResponsable == "activo")
         {
             //Recibo la ID por el "link".
             $idRecibido = $args['id'];
@@ -374,54 +402,66 @@ class PedidoController implements IApiUsable
         //---------------------- TOKEN USER DATA -------------------------------------------//
         $idUsuarioResponsable = AutentificadorJWT::DevolverIdUserResponsable($request);
         $tipoUsuarioResponsable = AutentificadorJWT::DevolverTipoUserResponsable($request);
+        $estadoUsuarioResponsable = AutentificadorJWT::DevolverEstadoUserResponsable($request);
         //----------------------------------------------------------------------------------//
 
         //------------------------USUARIOS AUTORIZADOS A REALIZAR LA ACCION-----------------//
         // PERMISOS DE ACCION: socio y mozo
         //----------------------------------------------------------------------------------//
-        if ($tipoUsuarioResponsable == "socio" || $tipoUsuarioResponsable == "mozo")
+        if (($tipoUsuarioResponsable == "socio" || $tipoUsuarioResponsable == "mozo") == true && $estadoUsuarioResponsable == "activo")
         {
             //Recibo el body del form-data en forma de array asociativo.
             $parametros = $request->getParsedBody();
+
             $idPedidoRecibido = $parametros['idPedido'];
+            $resultadoValidacionIDPedido =  Validaciones::validarIDPedido_Pedido($idPedidoRecibido);
 
-            //Me traigo a todos los pedidos y busco al pedido con el ID recibido.
-            $listaPedidos = Pedido::all();
-            $pedidoEncontrado = $listaPedidos->find($idPedidoRecibido);
-
-            //Si se encontro el pedido y la foto no es nula, la muevo a mi path, agregandole al final un '-{id}'
-            if ($pedidoEncontrado != null && $_FILES["fotoCliente"] != null )
+            if ($resultadoValidacionIDPedido == true)
             {
-                //Recibo el nombre en crudo
-                $nombreFotoRecibida = "fotos/".$_FILES["fotoCliente"]["name"];
-                
-                //Le saco la extension o todo lo que tenga despues de un "."
-                $nombreFotoRecibidaSinExt = explode(".",$nombreFotoRecibida);
+                //Me traigo a todos los pedidos y busco al pedido con el ID recibido.
+                $listaPedidos = Pedido::all();
+                $pedidoEncontrado = $listaPedidos->find($idPedidoRecibido);
 
-                //Con esa parte excluida del ".", le voy a agregar "-{id}+extension fija jpg"
-                $destino = $nombreFotoRecibidaSinExt[0] . "-" . $idPedidoRecibido . ".jpg";
+                //Si se encontro el pedido y la foto no es nula, la muevo a mi path, agregandole al final un '-{id}'
+                if ($pedidoEncontrado != null && $_FILES["fotoCliente"] != null )
+                {
+                    //Recibo el nombre en crudo
+                    $nombreFotoRecibida = "fotos/".$_FILES["fotoCliente"]["name"];
+                    
+                    //Le saco la extension o todo lo que tenga despues de un "."
+                    $nombreFotoRecibidaSinExt = explode(".",$nombreFotoRecibida);
 
-                //Muevo el archivo y uplodeo la DB
-                move_uploaded_file($_FILES["fotoCliente"]["tmp_name"],$destino);
+                    //Con esa parte excluida del ".", le voy a agregar "-{id}+extension fija jpg"
+                    $destino = $nombreFotoRecibidaSinExt[0] . "-" . $idPedidoRecibido . ".jpg";
 
-                $pedidoEncontrado->pathFoto = $destino;
-                $pedidoEncontrado->update(['pathFoto' => $destino]);
-                
-                $payload = json_encode(array("mensajeFinal" => "Foto uploadeada al pedido.",
-                "exito" => "fallido","tipo" => "agregarDato","hora" => date('h:i:s'),"idUsuarioResponsable" => $idUsuarioResponsable, 
-                "idUsuario" => null,"idProducto" => null, "idMesa" => null, "idPedido" => $pedidoEncontrado->id, "idVenta" => null));   
+                    //Muevo el archivo y uplodeo la DB
+                    move_uploaded_file($_FILES["fotoCliente"]["tmp_name"],$destino);
+
+                    $pedidoEncontrado->pathFoto = $destino;
+                    $pedidoEncontrado->update(['pathFoto' => $destino]);
+                    
+                    $payload = json_encode(array("mensajeFinal" => "Foto uploadeada al pedido.",
+                    "exito" => "fallido","tipo" => "agregarDato","hora" => date('h:i:s'),"idUsuarioResponsable" => $idUsuarioResponsable, 
+                    "idUsuario" => null,"idProducto" => null, "idMesa" => null, "idPedido" => $pedidoEncontrado->id, "idVenta" => null));   
+                }
+                else if ($pedidoEncontrado == null)
+                {
+                    $payload = json_encode(array("mensajeFinal" => "No se encontro un pedido al que asignarle una foto.",
+                    "exito" => "fallido","tipo" => "agregarDato","hora" => date('h:i:s'),"idUsuarioResponsable" => $idUsuarioResponsable, 
+                    "idUsuario" => null,"idProducto" => null, "idMesa" => null, "idPedido" => null,"idVenta" => null));    
+                }
+                else 
+                {
+                    $payload = json_encode(array("mensajeFinal" => "No se encontro una foto para asignar a un pedido.",
+                    "exito" => "fallido","tipo" => "agregarDato","hora" => date('h:i:s'),"idUsuarioResponsable" => $idUsuarioResponsable, 
+                    "idUsuario" => null,"idProducto" => null, "idMesa" => null, "idPedido" => null,"idVenta" => null));    
+                }
             }
-            else if ($pedidoEncontrado == null)
+            else
             {
-                $payload = json_encode(array("mensajeFinal" => "No se encontro un pedido al que asignarle una foto.",
+                $payload = json_encode(array("mensajeFinal" => "El ID ingresado para adjuntarle una foto, es invalido.",
                 "exito" => "fallido","tipo" => "agregarDato","hora" => date('h:i:s'),"idUsuarioResponsable" => $idUsuarioResponsable, 
-                "idUsuario" => null,"idProducto" => null, "idMesa" => null, "idPedido" => null,"idVenta" => null));    
-            }
-            else 
-            {
-                $payload = json_encode(array("mensajeFinal" => "No se encontro una foto para asignar a un pedido.",
-                "exito" => "fallido","tipo" => "agregarDato","hora" => date('h:i:s'),"idUsuarioResponsable" => $idUsuarioResponsable, 
-                "idUsuario" => null,"idProducto" => null, "idMesa" => null, "idPedido" => null,"idVenta" => null));    
+                "idUsuario" => null,"idProducto" => null, "idMesa" => null, "idPedido" => null,"idVenta" => null)); 
             }
         }
         else
@@ -435,7 +475,189 @@ class PedidoController implements IApiUsable
         return $response->withHeader('Content-Type', 'application/json');
     }
 
+    public function AgregarEncuesta($request, $response, $args)
+    {
+        //---------------------- TOKEN USER DATA -------------------------------------------//
+        $idUsuarioResponsable = AutentificadorJWT::DevolverIdUserResponsable($request);
+        $tipoUsuarioResponsable = AutentificadorJWT::DevolverTipoUserResponsable($request);
+        $estadoUsuarioResponsable = AutentificadorJWT::DevolverEstadoUserResponsable($request);
+        //----------------------------------------------------------------------------------//
+
+        //------------------------USUARIOS AUTORIZADOS A REALIZAR LA ACCION-----------------//
+        // PERMISOS DE ACCION: socio y mozo
+        //----------------------------------------------------------------------------------//
+        if (($tipoUsuarioResponsable == "socio" || $tipoUsuarioResponsable == "mozo") == true && $estadoUsuarioResponsable == "activo")
+        {
+            //Recibo el body del form-data en forma de array asociativo.
+            $parametros = $request->getParsedBody();
+            $idPedidoRecibido = $parametros['idPedido'];
+            $opinionClienteRecibido = $parametros['opinion'];
+            $valoracionClienteRecibido = $parametros['valoracion'];
+
+            $resultadoValidacionIDPedido = Validaciones::validarIDPedido_Pedido($idPedidoRecibido);
+            $resultadoValidacionOpinion = Validaciones::validarOpinion_Pedido($opinionClienteRecibido);
+            $resultadoValidacionValoracion = Validaciones::validarValoracion_Pedido($valoracionClienteRecibido);
+            
+            if ($resultadoValidacionIDPedido == true && $resultadoValidacionOpinion == true && $resultadoValidacionValoracion == true)
+            {
+                //Me traigo a todos los pedidos y busco al pedido con el ID recibido y lo mismo con la mesa.
+                $listaPedidos = Pedido::all();
+                $pedidoEncontrado = $listaPedidos->find($idPedidoRecibido);
+
+                //Si se encontro el pedido y la foto no es nula, la muevo a mi path, agregandole al final un '-{id}'
+                if ($pedidoEncontrado != null)
+                {
+                    // Creo la encueta y asigno sus correspondientes datos.
+                    $encuestaCreada = new Encuesta();
+
+                    $encuestaCreada->idPedido = $idPedidoRecibido;
+                    $encuestaCreada->opinion = $opinionClienteRecibido;
+                    $encuestaCreada->valoracion = $valoracionClienteRecibido;
+                    $encuestaCreada->hora = date('h:i:s');
+
+                    //El ORM guarda automaticamente la encuesta en la DB.
+                    $encuestaCreada->save();   
+                        
+                    $payload = json_encode(array("mensajeFinal" => "Encuesta creada y relacionada con el pedido correctamente.",
+                    "exito" => "exitoso","tipo" => "agregarDato","hora" => date('h:i:s'),"idUsuarioResponsable" => $idUsuarioResponsable, 
+                    "idUsuario" => null,"idProducto" => null, "idMesa" => null, "idPedido" => $pedidoEncontrado->id, "idVenta" => null));   
+                }
+                else if ($pedidoEncontrado == null)
+                {
+                    $payload = json_encode(array("mensajeFinal" => "No se encontro un pedido al que asignarle la encuesta.",
+                    "exito" => "fallido","tipo" => "agregarDato","hora" => date('h:i:s'),"idUsuarioResponsable" => $idUsuarioResponsable, 
+                    "idUsuario" => null,"idProducto" => null, "idMesa" => null, "idPedido" => null,"idVenta" => null));    
+                }
+                else 
+                {
+                    $payload = json_encode(array("mensajeFinal" => "Hubo un error en los datos del pedido.",
+                    "exito" => "fallido","tipo" => "agregarDato","hora" => date('h:i:s'),"idUsuarioResponsable" => $idUsuarioResponsable, 
+                    "idUsuario" => null,"idProducto" => null, "idMesa" => null, "idPedido" => null,"idVenta" => null));    
+                }
+            }
+            else
+            {
+                $payload = json_encode(array("mensajeFinal" => "Hubo un error en el ingreso de datos del pedido.",
+                "exito" => "fallido","tipo" => "agregarDato","hora" => date('h:i:s'),"idUsuarioResponsable" => $idUsuarioResponsable, 
+                "idUsuario" => null,"idProducto" => null, "idMesa" => null, "idPedido" => null,"idVenta" => null));  
+            }
+        }
+        else
+        {
+            $payload = json_encode(array("mensajeFinal" => "El agregado de una encuesta al pedido no fue posible. No posee permisos.",
+            "exito" => "fallido","tipo" => "agregarDato","hora" => date('h:i:s'),"idUsuarioResponsable" => $idUsuarioResponsable, 
+            "idUsuario" => null,"idProducto" => null, "idMesa" => null, "idPedido" => null,"idVenta" => null));     
+        }
+
+        $response->getBody()->write($payload);
+        return $response->withHeader('Content-Type', 'application/json');
+    }
+
+    public function ModificarProducto($request, $response, $args)
+    {
+        //---------------------- TOKEN USER DATA -------------------------------------------//
+        $idUsuarioResponsable = AutentificadorJWT::DevolverIdUserResponsable($request);
+        $tipoUsuarioResponsable = AutentificadorJWT::DevolverTipoUserResponsable($request);
+        $estadoUsuarioResponsable = AutentificadorJWT::DevolverEstadoUserResponsable($request);
+        //----------------------------------------------------------------------------------//
+
+        //------------------------USUARIOS AUTORIZADOS A REALIZAR LA ACCION-----------------//
+        // PERMISOS DE ACCION: socio, y todos los de la cocina
+        //----------------------------------------------------------------------------------//
+        if (($tipoUsuarioResponsable == "socio" || $tipoUsuarioResponsable == "cocinero" || 
+        $tipoUsuarioResponsable == "cervecero" || $tipoUsuarioResponsable == "bartender") == true && 
+        $estadoUsuarioResponsable == "activo")
+        {
+            //Recibo el body del form-data en forma de array asociativo.
+            $parametros = $request->getParsedBody();
+
+            $idVentaRecibido = $parametros['idVenta'];
+            $estadoRecibido = $parametros['estado'];
+
+            $resultadoValidacionIDPedido = Validaciones::validarIDVenta_Pedido($idVentaRecibido);
+            $resultadoValidacionEstadoVenta = Validaciones::validarEstadoVenta_Pedido($estadoRecibido);
+            
+            if ($resultadoValidacionIDPedido == true && $resultadoValidacionEstadoVenta == true)
+            {
+                //Me traigo a todos las ventas y busco a la venta con el ID recibido. Si la encuentro entonces cambio el estado.
+                $listaVentas = Venta::all();
+                $ventaEncontrada = $listaVentas->find($idVentaRecibido);
+
+                if ($ventaEncontrada != null)
+                {
+                    $ventaEncontrada->estado = $estadoRecibido;
+                    $ventaEncontrada->save();
+                
+                    $payload = json_encode(array("mensajeFinal" => "Estado de la venta modificado correctamente.",
+                    "exito" => "exitoso","tipo" => "modificacion","hora" => date('h:i:s'),"idUsuarioResponsable" => $idUsuarioResponsable, 
+                    "idUsuario" => null,"idProducto" => null, "idMesa" => null, "idPedido" => null,"idVenta" => null));
+                }
+                else
+                {
+                    $payload = json_encode(array("mensajeFinal" => "No se pudo encontrar la venta con el ID Ingresado.",
+                    "exito" => "fallido","tipo" => "modificacion","hora" => date('h:i:s'),"idUsuarioResponsable" => $idUsuarioResponsable, 
+                    "idUsuario" => null,"idProducto" => null, "idMesa" => null, "idPedido" => null,"idVenta" => null));
+                }  
+            }
+            else
+            {
+                $payload = json_encode(array("mensajeFinal" => "Hubo un error en el ingreso de datos de la venta.",
+                "exito" => "fallido","tipo" => "modificacion","hora" => date('h:i:s'),"idUsuarioResponsable" => $idUsuarioResponsable, 
+                "idUsuario" => null,"idProducto" => null, "idMesa" => null, "idPedido" => null,"idVenta" => null));  
+            }
+        }
+        else
+        {
+            $payload = json_encode(array("mensajeFinal" => "El cambio de estado de una venta no fue posible. No posee permisos.",
+            "exito" => "fallido","tipo" => "agregarDato","hora" => date('h:i:s'),"idUsuarioResponsable" => $idUsuarioResponsable, 
+            "idUsuario" => null,"idProducto" => null, "idMesa" => null, "idPedido" => null,"idVenta" => null));     
+        }
+
+        $response->getBody()->write($payload);
+        return $response->withHeader('Content-Type', 'application/json');
+    }
+
+    public function ConsultarTiempoPedido($request, $response, $args)
+    {
+        //Recibo la ID por el "link".
+        $idPedidoRecibido = $args['id'];
+
+        $resultadoValidacionIDVenta = Validaciones::validarIDPedido_Pedido($idPedidoRecibido);
+        
+        if ($resultadoValidacionIDVenta == true)
+        {
+            //Me traigo a todos los pedidos y busco al pedido con el ID recibido. Si lo encuentro entonces cambio el estado.
+            $listaPedidos = Venta::all();
+            $pedidoEncontrado = $listaPedidos->find($idPedidoRecibido);
+
+            if ($pedidoEncontrado != null)
+            {
+                echo "<br> Tiempo estimado: <br>",$pedidoEncontrado->minutosEstimados;
+
+                $payload = json_encode(array("mensajeFinal" => "El tiempo estimado del pedido fue mostrado correctamente.",
+                "exito" => "exitoso","tipo" => "mostrar","hora" => date('h:i:s'),"idUsuarioResponsable" => null, 
+                "idUsuario" => null,"idProducto" => null, "idMesa" => null, "idPedido" => null,"idVenta" => null));
+            }
+            else
+            {
+                $payload = json_encode(array("mensajeFinal" => "No se pudo encontrar el pedido con el ID Ingresado.",
+                "exito" => "fallido","tipo" => "modificacion","hora" => date('h:i:s'),"idUsuarioResponsable" => null, 
+                "idUsuario" => null,"idProducto" => null, "idMesa" => null, "idPedido" => null,"idVenta" => null));
+            }  
+        }
+        else
+        {
+            $payload = json_encode(array("mensajeFinal" => "Hubo un error en el ingreso de datos del pedido.",
+            "exito" => "fallido","tipo" => "modificacion","hora" => date('h:i:s'),"idUsuarioResponsable" => null, 
+            "idUsuario" => null,"idProducto" => null, "idMesa" => null, "idPedido" => null,"idVenta" => null));  
+        }
+        
+        $response->getBody()->write($payload);
+        return $response->withHeader('Content-Type', 'application/json');
+    }
+
     // --------------- FUNCIONES PRIVADAS Y NECESARIAS PARA VALIDAR O CALCULAR -------------------------------------------//
+    
     private function crear_y_GuardarVentasPorCadaProducto($arrayAsociativoProductosRecibido,$pedidoCreadoRecibido)
     {
 

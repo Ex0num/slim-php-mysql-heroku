@@ -11,12 +11,13 @@ class ProductoController implements IApiUsable
         //---------------------- TOKEN USER DATA -------------------------------------------//
         $idUsuarioResponsable = AutentificadorJWT::DevolverIdUserResponsable($request);
         $tipoUsuarioResponsable = AutentificadorJWT::DevolverTipoUserResponsable($request);
+        $estadoUsuarioResponsable = AutentificadorJWT::DevolverEstadoUserResponsable($request);
         //----------------------------------------------------------------------------------//
 
         //------------------------USUARIOS AUTORIZADOS A REALIZAR LA ACCION-----------------//
         // PERMISOS DE ACCION: socio
         //----------------------------------------------------------------------------------//
-        if ($tipoUsuarioResponsable == "socio")
+        if (($tipoUsuarioResponsable == "socio" || $tipoUsuarioResponsable == "mozo") == true && $estadoUsuarioResponsable == "activo")
         {
             //Recibo el body del form-data en forma de array asociativo.
             $parametros = $request->getParsedBody();
@@ -28,22 +29,39 @@ class ProductoController implements IApiUsable
             $tipoRecibido = $parametros['tipo'];
             $stockRecibido = $parametros['stock'];
 
-            // Creo el producto y asigno sus correspondientes datos.
-            $productoCreado = new Producto();
-            $productoCreado->nombre = $nombreRecibido;
-            $productoCreado->precio = $precioRecibido;
-            $productoCreado->tiempoMinutos = $tiempoPromedioRecibido;
-            $productoCreado->area = $areaResponsableRecibida;
-            $productoCreado->tipo = $tipoRecibido;
-            $productoCreado->stock = $stockRecibido;
+            $resultadoValidacionNombre =  Validaciones::validarNombre_Producto($nombreRecibido);
+            $resultadoValidacionPrecio =  Validaciones::validarPrecio_Producto($precioRecibido);
+            $resultadoValidacionTiempoPromedio =  Validaciones::validarTiempo_Producto($tiempoPromedioRecibido);
+            $resultadoValidacionArea =  Validaciones::validarArea_Producto($areaResponsableRecibida);
+            $resultadoValidacionTipo =  Validaciones::validarTipo_Producto($tipoRecibido);
+            $resultadoValidacionStock =  Validaciones::validarStock_Producto($stockRecibido);
 
-            //El ORM guarda automaticamente el producto en la DB.
-            $productoCreado->save();
+            if ($resultadoValidacionNombre == true && $resultadoValidacionPrecio == true && $resultadoValidacionArea == true && 
+            $resultadoValidacionTipo == true && $resultadoValidacionStock == true)
+            {
+                // Creo el producto y asigno sus correspondientes datos.
+                $productoCreado = new Producto();
+                $productoCreado->nombre = $nombreRecibido;
+                $productoCreado->precio = $precioRecibido;
+                $productoCreado->tiempoMinutos = $tiempoPromedioRecibido;
+                $productoCreado->area = $areaResponsableRecibida;
+                $productoCreado->tipo = $tipoRecibido;
+                $productoCreado->stock = $stockRecibido;
 
-            //Retorno la respuesta con el body que contiene un mensaje.
-            $payload = json_encode(array("mensajeFinal" => "Producto creado con exito.",
-            "exito" => "exitoso","tipo" => "alta","hora" => date('h:i:s'),"idUsuarioResponsable" => $idUsuarioResponsable, 
-            "idUsuario" => null,"idProducto" => $productoCreado->id, "idMesa" => null, "idPedido" => null,"idVenta" => null));
+                //El ORM guarda automaticamente el producto en la DB.
+                $productoCreado->save();
+
+                //Retorno la respuesta con el body que contiene un mensaje.
+                $payload = json_encode(array("mensajeFinal" => "Producto creado con exito.",
+                "exito" => "exitoso","tipo" => "alta","hora" => date('h:i:s'),"idUsuarioResponsable" => $idUsuarioResponsable, 
+                "idUsuario" => null,"idProducto" => $productoCreado->id, "idMesa" => null, "idPedido" => null,"idVenta" => null));
+            }
+            else
+            {
+                $payload = json_encode(array("mensajeFinal" => "Producto creado sin exito. Hubo algun dato invalido.",
+                "exito" => "fallido","tipo" => "alta","hora" => date('h:i:s'),"idUsuarioResponsable" => $idUsuarioResponsable, 
+                "idUsuario" => null,"idProducto" => null, "idMesa" => null, "idPedido" => null,"idVenta" => null));
+            }
         }
         else
         {
@@ -62,12 +80,13 @@ class ProductoController implements IApiUsable
         //---------------------- TOKEN USER DATA -------------------------------------------//
         $idUsuarioResponsable = AutentificadorJWT::DevolverIdUserResponsable($request);
         $tipoUsuarioResponsable = AutentificadorJWT::DevolverTipoUserResponsable($request);
+        $estadoUsuarioResponsable = AutentificadorJWT::DevolverEstadoUserResponsable($request);
         //----------------------------------------------------------------------------------//
 
         //------------------------USUARIOS AUTORIZADOS A REALIZAR LA ACCION-----------------//
         // PERMISOS DE ACCION: socio
         //----------------------------------------------------------------------------------//
-        if ($tipoUsuarioResponsable == "socio")
+        if (($tipoUsuarioResponsable == "socio" || $tipoUsuarioResponsable == "mozo") == true && $estadoUsuarioResponsable == "activo")
         {
             //Recibo la ID por el "link".
             $idRecibida = $args['id'];
@@ -109,12 +128,13 @@ class ProductoController implements IApiUsable
         //---------------------- TOKEN USER DATA -------------------------------------------//
         $idUsuarioResponsable = AutentificadorJWT::DevolverIdUserResponsable($request);
         $tipoUsuarioResponsable = AutentificadorJWT::DevolverTipoUserResponsable($request);
+        $estadoUsuarioResponsable = AutentificadorJWT::DevolverEstadoUserResponsable($request);
         //----------------------------------------------------------------------------------//
 
         //------------------------USUARIOS AUTORIZADOS A REALIZAR LA ACCION-----------------//
         // PERMISOS DE ACCION: socio
         //----------------------------------------------------------------------------------//
-        if ($tipoUsuarioResponsable == "socio")
+        if ($tipoUsuarioResponsable == "socio" && $estadoUsuarioResponsable == "activo")
         {
             //Recibo la ID por el "link".
             $id = $args['id'];
@@ -134,20 +154,37 @@ class ProductoController implements IApiUsable
                 $tipoRecibido = $body['tipo'];
                 $stockRecibido = $body['stock'];
 
-                //Piso los datos 'viejos' por los 'nuevos' datos del producto a modificar.
-                $productoEncontrado->nombre = $nombreRecibido;
-                $productoEncontrado->precio = $precioRecibido;
-                $productoEncontrado->tiempoMinutos = $tiempoPromedioRecibido;
-                $productoEncontrado->area = $areaResponsableRecibida;
-                $productoEncontrado->tipo = $tipoRecibido;
-                $productoEncontrado->stock = $stockRecibido;
-            
-                //El ORM guarda automaticamente la producto en la DB.
-                $productoEncontrado->save();
+                $resultadoValidacionNombre =  Validaciones::validarNombre_Producto($nombreRecibido);
+                $resultadoValidacionPrecio =  Validaciones::validarPrecio_Producto($precioRecibido);
+                $resultadoValidacionTiempoPromedio =  Validaciones::validarTiempo_Producto($tiempoPromedioRecibido);
+                $resultadoValidacionArea =  Validaciones::validarArea_Producto($areaResponsableRecibida);
+                $resultadoValidacionTipo =  Validaciones::validarTipo_Producto($tipoRecibido);
+                $resultadoValidacionStock =  Validaciones::validarStock_Producto($stockRecibido);
 
-                $payload = json_encode(array("mensajeFinal" => "Producto modificado con exito.",
-                "exito" => "fallido","tipo" => "modificacion","hora" => date('h:i:s'),"idUsuarioResponsable" => $idUsuarioResponsable, 
-                "idUsuario" => null,"idProducto" => $productoEncontrado->id, "idMesa" => null, "idPedido" => null,"idVenta" => null));
+                if ($resultadoValidacionNombre == true && $resultadoValidacionPrecio == true && $resultadoValidacionTiempoPromedio == true &&
+                $resultadoValidacionArea == true && $resultadoValidacionTipo == true && $resultadoValidacionStock == true)
+                {
+                    //Piso los datos 'viejos' por los 'nuevos' datos del producto a modificar.
+                    $productoEncontrado->nombre = $nombreRecibido;
+                    $productoEncontrado->precio = $precioRecibido;
+                    $productoEncontrado->tiempoMinutos = $tiempoPromedioRecibido;
+                    $productoEncontrado->area = $areaResponsableRecibida;
+                    $productoEncontrado->tipo = $tipoRecibido;
+                    $productoEncontrado->stock = $stockRecibido;
+                
+                    //El ORM guarda automaticamente la producto en la DB.
+                    $productoEncontrado->save();
+
+                    $payload = json_encode(array("mensajeFinal" => "Producto modificado con exito.",
+                    "exito" => "fallido","tipo" => "modificacion","hora" => date('h:i:s'),"idUsuarioResponsable" => $idUsuarioResponsable, 
+                    "idUsuario" => null,"idProducto" => $productoEncontrado->id, "idMesa" => null, "idPedido" => null,"idVenta" => null));
+                }
+                else
+                {
+                    $payload = json_encode(array("mensajeFinal" => "Producto modificado sin exito. Hubo algun dato invalido.",
+                    "exito" => "fallido","tipo" => "modificacion","hora" => date('h:i:s'),"idUsuarioResponsable" => $idUsuarioResponsable, 
+                    "idUsuario" => null,"idProducto" => $productoEncontrado->id, "idMesa" => null, "idPedido" => null,"idVenta" => null));
+                }
             }
             else
             {
@@ -173,12 +210,13 @@ class ProductoController implements IApiUsable
         //---------------------- TOKEN USER DATA -------------------------------------------//
         $idUsuarioResponsable = AutentificadorJWT::DevolverIdUserResponsable($request);
         $tipoUsuarioResponsable = AutentificadorJWT::DevolverTipoUserResponsable($request);
+        $estadoUsuarioResponsable = AutentificadorJWT::DevolverEstadoUserResponsable($request);
         //----------------------------------------------------------------------------------//
 
         //------------------------USUARIOS AUTORIZADOS A REALIZAR LA ACCION-----------------//
         // PERMISOS DE ACCION: socio y mozo
         //----------------------------------------------------------------------------------//
-        if ($tipoUsuarioResponsable == "socio" || $tipoUsuarioResponsable == "mozo")
+        if (($tipoUsuarioResponsable == "socio" || $tipoUsuarioResponsable == "mozo") == true && $estadoUsuarioResponsable == "activo")
         {
             //Me traigo a todas los productos.
             $listaProductos = App\Models\Producto::all();
@@ -205,12 +243,13 @@ class ProductoController implements IApiUsable
         //---------------------- TOKEN USER DATA -------------------------------------------//
         $idUsuarioResponsable = AutentificadorJWT::DevolverIdUserResponsable($request);
         $tipoUsuarioResponsable = AutentificadorJWT::DevolverTipoUserResponsable($request);
+        $estadoUsuarioResponsable = AutentificadorJWT::DevolverEstadoUserResponsable($request);
         //----------------------------------------------------------------------------------//
 
         //------------------------USUARIOS AUTORIZADOS A REALIZAR LA ACCION-----------------//
         // PERMISOS DE ACCION: socio y mozo
         //----------------------------------------------------------------------------------//
-        if ($tipoUsuarioResponsable == "socio" || $tipoUsuarioResponsable == "mozo")
+        if (($tipoUsuarioResponsable == "socio" || $tipoUsuarioResponsable == "mozo") == true && $estadoUsuarioResponsable == "activo")
         {
             //Recibo la ID por el "link".
             $idRecibido = $args['id'];

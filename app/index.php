@@ -25,6 +25,7 @@ require_once './controllers/MesaController.php';
 require_once './controllers/PedidoController.php';
 require_once './controllers/ProductoController.php';
 require_once './controllers/CSV_Controller.php';
+require_once './controllers/InformesController.php';
 
 // Load ENV
 $dotenv = Dotenv\Dotenv::createImmutable(__DIR__);
@@ -239,6 +240,15 @@ $app->group('/jwt', function (RouteCollectorProxy $group)
     });
 });
 
+// ------------------------------// INFORMES // -------------------------------------------------------------
+$app->group('/informes', function (RouteCollectorProxy $group) 
+{
+    $group->get('/mesas/todos', \InformesController::class . ':traerInformesMesas');
+    $group->get('/empleados/todos', \InformesController::class . ':traerInformesEmpleados');
+    $group->get('/pedidos/todos', \InformesController::class . ':traerInformesPedidos');
+
+})->add(\Logger::class . ':Login');
+
 //------------------------------------------------------------------------------------------------------
 $app->get('[/]', function (Request $request, Response $response) 
 {    
@@ -249,9 +259,4 @@ $app->get('[/]', function (Request $request, Response $response)
 $app->run();
 
 //------------------------------------------------------------------------------------------------------
-
-/*
-    -Hacer el .sql (query) de la database entera. Con todas las tablas y una data default.
-*/
-
 ?>
